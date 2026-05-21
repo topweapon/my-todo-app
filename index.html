@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#185FA5">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>할 일 관리</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; background: #f0f4f8; font-family: -apple-system, 'Noto Sans KR', sans-serif; }
+body { overflow-x: hidden; }
+
+.wrap { max-width: 480px; margin: 0 auto; padding: 16px 14px 100px; min-height: 100vh; }
+
+/* 로딩 오버레이 */
+#loading-overlay { position: fixed; inset: 0; background: #185FA5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; z-index: 999; }
+#loading-overlay .lo-icon { font-size: 48px; color: #E6F1FB; }
+#loading-overlay .lo-text { font-size: 16px; color: #B5D4F4; }
+#loading-overlay.hidden { display: none; }
+
+/* 동기화 상태 */
+.sync-bar { display: flex; align-items: center; gap: 6px; font-size: 12px; margin-bottom: 10px; padding: 6px 14px; border-radius: 99px; width: fit-content; }
+.sync-bar.synced { background: #E1F5EE; color: #0F6E56; }
+.sync-bar.syncing { background: #E6F1FB; color: #185FA5; }
+.sync-bar.offline { background: #FAECE7; color: #993C1D; }
+.sync-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.sync-bar.synced .sync-dot { background: #1D9E75; }
+.sync-bar.syncing .sync-dot { background: #378ADD; animation: pulse 1s infinite; }
+.sync-bar.offline .sync-dot { background: #D85A30; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+.header { background: #185FA5; border-radius: 24px; padding: 18px 20px 14px; margin-bottom: 14px; }
+.date-lbl { font-size: 12px; color: #85B7EB; margin-bottom: 4px; }
+.title { font-size: 20px; font-weight: 600; color: #E6F1FB; display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+.tab-btns { display: flex; gap: 6px; }
+.tab-btn { flex: 1; font-size: 13px; padding: 8px 6px; border-radius: 99px; border: 1.5px solid #85B7EB; background: transparent; color: #B5D4F4; cursor: pointer; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 5px; }
+.tab-btn.active { background: #E6F1FB; color: #0C447C; border-color: #E6F1FB; font-weight: 600; }
+
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+.stat { border-radius: 20px; padding: 12px 10px; }
+.stat .num { font-size: 24px; font-weight: 700; }
+.stat .lbl { font-size: 11px; margin-top: 2px; }
+.stat.blue { background: #E6F1FB; } .stat.blue .num { color: #0C447C; } .stat.blue .lbl { color: #185FA5; }
+.stat.green { background: #E1F5EE; } .stat.green .num { color: #085041; } .stat.green .lbl { color: #0F6E56; }
+.stat.coral { background: #FAECE7; } .stat.coral .num { color: #712B13; } .stat.coral .lbl { color: #993C1D; }
+
+.add-row { display: flex; gap: 8px; margin-bottom: 14px; }
+.add-row input { flex: 1; height: 46px; border-radius: 99px; border: 1.5px solid #B5D4F4; background: #fff; color: #1a1a1a; padding: 0 18px; font-size: 15px; outline: none; font-family: inherit; }
+.add-row input:focus { border-color: #378ADD; box-shadow: 0 0 0 3px rgba(53,138,221,0.15); }
+.add-btn { height: 46px; min-width: 46px; padding: 0 18px; border-radius: 99px; border: none; background: #185FA5; color: #E6F1FB; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.add-btn:active { background: #0C447C; transform: scale(0.96); }
+
+.section-lbl { font-size: 11px; font-weight: 600; color: #888780; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 8px; display: flex; align-items: center; gap: 5px; }
+
+.task-list { display: flex; flex-direction: column; gap: 10px; }
+.task-card { border-radius: 20px; padding: 14px 16px; border: 2px solid transparent; }
+.task-card.pending { border-color: #B5D4F4; background: #fff; }
+.task-card.done { border-color: #9FE1CB; background: #E1F5EE; }
+.task-card.missed { border-color: #F5C4B3; background: #FAECE7; }
+
+.task-top { display: flex; align-items: center; gap: 10px; }
+.task-icon { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 16px; }
+.task-card.pending .task-icon { background: #E6F1FB; color: #185FA5; }
+.task-card.done .task-icon { background: #1D9E75; color: #E1F5EE; }
+.task-card.missed .task-icon { background: #D85A30; color: #FAECE7; }
+.task-text { flex: 1; font-size: 15px; color: #1a1a1a; line-height: 1.4; }
+.task-card.done .task-text { text-decoration: line-through; color: #0F6E56; }
+.task-card.missed .task-text { color: #712B13; }
+
+.badge { font-size: 11px; padding: 3px 10px; border-radius: 99px; font-weight: 600; white-space: nowrap; }
+.badge.pending { background: #E6F1FB; color: #185FA5; }
+.badge.done { background: #1D9E75; color: #E1F5EE; }
+.badge.missed { background: #D85A30; color: #FAECE7; }
+
+.btn-row { display: flex; gap: 6px; margin-top: 10px; align-items: center; padding-left: 44px; flex-wrap: wrap; }
+.action-btn { font-size: 12px; padding: 7px 14px; border-radius: 99px; cursor: pointer; display: flex; align-items: center; gap: 4px; font-family: inherit; }
+.btn-complete { border: 1.5px solid #1D9E75; background: #E1F5EE; color: #085041; }
+.btn-complete:active { background: #9FE1CB; }
+.btn-fail { border: 1.5px solid #D85A30; background: #FAECE7; color: #712B13; }
+.btn-fail:active { background: #F5C4B3; }
+.btn-del { border: 1px solid #ccc; background: #f5f5f5; color: #666; }
+.btn-del:active { background: #FCEBEB; border-color: #F09595; color: #A32D2D; }
+.undo-link { font-size: 12px; color: #185FA5; cursor: pointer; text-decoration: underline; padding: 4px 0; background: none; border: none; font-family: inherit; }
+
+.reason-box { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; padding-left: 44px; }
+.reason-input { width: 100%; height: 64px; border-radius: 16px; border: 1.5px solid #F0997B; background: #fff; color: #1a1a1a; padding: 10px 14px; font-size: 14px; resize: none; outline: none; font-family: inherit; }
+.reason-submit { align-self: flex-end; font-size: 13px; padding: 7px 18px; border-radius: 99px; border: none; background: #D85A30; color: #FAECE7; cursor: pointer; font-family: inherit; font-weight: 600; }
+.reason-display { font-size: 12px; color: #712B13; background: #F5C4B3; border-radius: 14px; padding: 8px 14px; line-height: 1.5; margin-top: 8px; margin-left: 44px; display: flex; align-items: flex-start; gap: 6px; }
+
+.empty { text-align: center; padding: 2.5rem 1rem; color: #888; font-size: 14px; border: 1.5px dashed #B5D4F4; border-radius: 24px; background: #E6F1FB; }
+.empty i { font-size: 32px; color: #378ADD; display: block; margin-bottom: 8px; }
+
+/* PAST */
+.past-panel { display: flex; flex-direction: column; gap: 12px; }
+.date-chips-wrap { display: flex; align-items: center; gap: 6px; background: #E6F1FB; border-radius: 99px; padding: 6px 8px; }
+.nav-btn { width: 34px; height: 34px; border-radius: 50%; border: none; background: #fff; color: #185FA5; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+.nav-btn:active { background: #B5D4F4; }
+.nav-btn:disabled { opacity: 0.3; }
+.chip-scroll { display: flex; gap: 6px; flex: 1; overflow-x: auto; padding: 2px 0; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.chip-scroll::-webkit-scrollbar { display: none; }
+.nav-date-chip { font-size: 12px; padding: 5px 13px; border-radius: 99px; border: 1.5px solid #B5D4F4; background: #fff; color: #185FA5; cursor: pointer; white-space: nowrap; font-family: inherit; flex-shrink: 0; }
+.nav-date-chip.selected { background: #185FA5; color: #E6F1FB; border-color: #185FA5; font-weight: 600; }
+
+.past-day-card { background: #fff; border: 1.5px solid #B5D4F4; border-radius: 24px; padding: 18px; }
+.past-day-title { font-size: 15px; font-weight: 600; color: #1a1a1a; display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.past-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
+.past-badge { font-size: 11px; padding: 4px 12px; border-radius: 99px; font-weight: 600; }
+.past-badge.g { background: #E1F5EE; color: #085041; }
+.past-badge.o { background: #FAECE7; color: #712B13; }
+.past-badge.b { background: #E6F1FB; color: #0C447C; }
+.past-bar { height: 12px; background: #FAECE7; border-radius: 99px; overflow: hidden; display: flex; margin: 10px 0 6px; }
+.past-bar-done { background: #1D9E75; }
+.past-bar-miss { background: #D85A30; }
+.past-bar-pend { background: #B5D4F4; }
+.leg-row { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: #666; margin-bottom: 14px; }
+.leg-row span { display: flex; align-items: center; gap: 4px; }
+.leg-sq { width: 10px; height: 10px; border-radius: 99px; flex-shrink: 0; }
+.past-task-list { display: flex; flex-direction: column; gap: 8px; }
+.past-task { border-radius: 16px; padding: 12px 14px; display: flex; align-items: flex-start; gap: 10px; }
+.past-task.done { background: #E1F5EE; }
+.past-task.missed { background: #FAECE7; }
+.past-task.pending { background: #f5f5f5; }
+.past-task-icon { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 13px; }
+.past-task.done .past-task-icon { background: #1D9E75; color: #E1F5EE; }
+.past-task.missed .past-task-icon { background: #D85A30; color: #FAECE7; }
+.past-task.pending .past-task-icon { background: #B5D4F4; color: #185FA5; }
+.past-task-body { flex: 1; }
+.past-task-text { font-size: 14px; color: #1a1a1a; line-height: 1.4; }
+.past-task.done .past-task-text { text-decoration: line-through; color: #0F6E56; }
+.past-task.missed .past-task-text { color: #712B13; }
+.past-task-reason { font-size: 12px; color: #993C1D; margin-top: 5px; background: #F5C4B3; border-radius: 10px; padding: 4px 10px; display: inline-block; line-height: 1.4; }
+
+/* STATS */
+.history-panel { display: flex; flex-direction: column; gap: 12px; }
+.overall-card { background: #fff; border: 1.5px solid #B5D4F4; border-radius: 24px; padding: 18px; }
+.overall-title { font-size: 15px; font-weight: 600; color: #1a1a1a; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+.overall-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+.ov-stat { border-radius: 16px; padding: 12px 10px; }
+.ov-stat .n { font-size: 20px; font-weight: 700; }
+.ov-stat .l { font-size: 11px; margin-top: 2px; }
+.ov-stat.blue { background: #E6F1FB; } .ov-stat.blue .n { color: #0C447C; } .ov-stat.blue .l { color: #185FA5; }
+.ov-stat.green { background: #E1F5EE; } .ov-stat.green .n { color: #085041; } .ov-stat.green .l { color: #0F6E56; }
+.ov-stat.coral { background: #FAECE7; } .ov-stat.coral .n { color: #712B13; } .ov-stat.coral .l { color: #993C1D; }
+.bar-labels { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
+.bar-lbl-done { color: #0F6E56; font-weight: 600; }
+.bar-lbl-miss { color: #993C1D; font-weight: 600; }
+.bar-track { height: 22px; background: #FAECE7; border-radius: 99px; overflow: hidden; display: flex; }
+.bar-done-fill { background: #1D9E75; border-radius: 99px 0 0 99px; display: flex; align-items: center; justify-content: center; }
+.bar-done-fill.full { border-radius: 99px; }
+.bar-miss-fill { background: #D85A30; flex: 1; border-radius: 0 99px 99px 0; }
+.bar-pct-text { font-size: 11px; color: #E1F5EE; font-weight: 600; white-space: nowrap; padding: 0 8px; }
+.chart-card { background: #fff; border: 1.5px solid #B5D4F4; border-radius: 24px; padding: 18px; }
+.chart-title { font-size: 15px; font-weight: 600; color: #1a1a1a; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+.chart-legend { display: flex; gap: 14px; margin-bottom: 10px; font-size: 12px; color: #666; flex-wrap: wrap; }
+.chart-legend span { display: flex; align-items: center; gap: 4px; }
+.no-data { text-align: center; padding: 2.5rem; color: #888; font-size: 14px; border: 1.5px dashed #ccc; border-radius: 24px; }
+.no-data i { font-size: 28px; display: block; margin-bottom: 8px; }
+
+.panel { display: none; }
+.panel.active { display: block; }
+</style>
+</head>
+<body>
+
+<!-- 로딩 화면 -->
+<div id="loading-overlay">
+  <i class="ti ti-checklist lo-icon"></i>
+  <div class="lo-text">데이터 불러오는 중...</div>
+</div>
+
+<div class="wrap">
+
+  <!-- 동기화 상태 표시 -->
+  <div class="sync-bar syncing" id="sync-bar">
+    <div class="sync-dot"></div>
+    <span id="sync-text">연결 중...</span>
+  </div>
+
+  <div class="header">
+    <div class="date-lbl" id="date-label"></div>
+    <div class="title"><i class="ti ti-checklist"></i> 할 일 관리</div>
+    <div class="tab-btns">
+      <button class="tab-btn active" id="tab-today" onclick="switchTab('today')">
+        <i class="ti ti-calendar-today" style="font-size:14px"></i> 오늘
+      </button>
+      <button class="tab-btn" id="tab-past" onclick="switchTab('past')">
+        <i class="ti ti-history" style="font-size:14px"></i> 과거
+      </button>
+      <button class="tab-btn" id="tab-stats" onclick="switchTab('stats')">
+        <i class="ti ti-chart-bar" style="font-size:14px"></i> 통계
+      </button>
+    </div>
+  </div>
+
+  <div id="panel-today" class="panel active">
+    <div class="stats">
+      <div class="stat blue"><div class="num" id="s-total">0</div><div class="lbl">전체</div></div>
+      <div class="stat green"><div class="num" id="s-done">0</div><div class="lbl">완료</div></div>
+      <div class="stat coral"><div class="num" id="s-miss">0</div><div class="lbl">미완료</div></div>
+    </div>
+    <div class="add-row">
+      <input type="text" id="task-input" placeholder="새 할 일을 입력하세요..." maxlength="80" />
+      <button class="add-btn" onclick="addTask()"><i class="ti ti-plus"></i></button>
+    </div>
+    <div class="section-lbl"><i class="ti ti-layout-list"></i> 할 일 목록</div>
+    <div class="task-list" id="task-list"></div>
+  </div>
+
+  <div id="panel-past" class="panel">
+    <div class="past-panel" id="past-panel"></div>
+  </div>
+
+  <div id="panel-stats" class="panel">
+    <div class="history-panel" id="history-panel"></div>
+  </div>
+
+</div>
+
+<!-- Firebase SDK (CDN, no bundler needed) -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, set, onValue, off } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyASLzvLCiAP5taMfAK2EqlSKA6IuQoSOzc",
+  authDomain: "my-todo-app-8bc6f.firebaseapp.com",
+  databaseURL: "https://my-todo-app-8bc6f-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "my-todo-app-8bc6f",
+  storageBucket: "my-todo-app-8bc6f.firebasestorage.app",
+  messagingSenderId: "523916936503",
+  appId: "1:523916936503:web:57fec3008c60bd6e24c6b2"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+const WEEK = ['일','월','화','수','목','금','토'];
+const now = new Date();
+const todayKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+
+document.getElementById('date-label').textContent =
+  `${now.getFullYear()}년 ${now.getMonth()+1}월 ${now.getDate()}일 (${WEEK[now.getDay()]}요일)`;
+
+let allData = {};
+let showReasonFor = null;
+let selectedPastKey = null;
+let chartInst = null;
+let currentTab = 'today';
+let isSaving = false;
+
+// 동기화 상태 UI
+function setSyncStatus(state) {
+  const bar = document.getElementById('sync-bar');
+  const txt = document.getElementById('sync-text');
+  bar.className = 'sync-bar ' + state;
+  txt.textContent = state === 'synced' ? '동기화 완료' : state === 'syncing' ? '동기화 중...' : '오프라인';
+}
+
+// Firebase 실시간 리스너 — 어느 기기에서 바꿔도 즉시 반영
+const dataRef = ref(db, 'todos');
+onValue(dataRef, (snapshot) => {
+  allData = snapshot.val() || {};
+  if (!allData[todayKey]) allData[todayKey] = [];
+
+  document.getElementById('loading-overlay').classList.add('hidden');
+  setSyncStatus('synced');
+
+  // 현재 탭 다시 렌더링
+  if (currentTab === 'today') renderToday();
+  else if (currentTab === 'past') renderPast();
+  else if (currentTab === 'stats') renderStats();
+}, (error) => {
+  setSyncStatus('offline');
+  document.getElementById('loading-overlay').classList.add('hidden');
+  console.error(error);
+});
+
+// Firebase에 저장
+async function persist() {
+  setSyncStatus('syncing');
+  try {
+    await set(dataRef, allData);
+    setSyncStatus('synced');
+  } catch(e) {
+    setSyncStatus('offline');
+  }
+}
+
+function getTasks() { return allData[todayKey] || []; }
+function setTasks(arr) { allData[todayKey] = arr; }
+
+// ── 오늘 탭 ──────────────────────────────
+window.addTask = async function() {
+  const inp = document.getElementById('task-input');
+  const text = inp.value.trim();
+  if (!text) return;
+  const tasks = getTasks();
+  tasks.push({ id: Date.now(), text, status: 'pending', reason: '' });
+  setTasks(tasks);
+  inp.value = ''; inp.blur();
+  await persist();
+};
+
+document.getElementById('task-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') window.addTask();
+});
+
+window.markDone = async function(id) {
+  const tasks = getTasks();
+  const t = tasks.find(t => t.id === id); if (!t) return;
+  t.status = 'done'; t.reason = '';
+  if (showReasonFor === id) showReasonFor = null;
+  setTasks(tasks); await persist();
+};
+
+window.markFail = function(id) {
+  showReasonFor = showReasonFor === id ? null : id;
+  renderToday();
+};
+
+window.submitReason = async function(id) {
+  const el = document.getElementById('reason-' + id);
+  const tasks = getTasks();
+  const t = tasks.find(t => t.id === id); if (!t) return;
+  t.status = 'missed'; t.reason = (el?.value || '').trim() || '이유 없음';
+  showReasonFor = null; setTasks(tasks); await persist();
+};
+
+window.undoTask = async function(id) {
+  const tasks = getTasks();
+  const t = tasks.find(t => t.id === id); if (!t) return;
+  t.status = 'pending'; t.reason = '';
+  setTasks(tasks); await persist();
+};
+
+window.deleteTask = async function(id) {
+  const tasks = getTasks().filter(t => t.id !== id);
+  if (showReasonFor === id) showReasonFor = null;
+  setTasks(tasks); await persist();
+};
+
+function renderToday() {
+  const tasks = getTasks();
+  const list = document.getElementById('task-list');
+  const done = tasks.filter(t => t.status === 'done').length;
+  const miss = tasks.filter(t => t.status === 'missed').length;
+  document.getElementById('s-total').textContent = tasks.length;
+  document.getElementById('s-done').textContent = done;
+  document.getElementById('s-miss').textContent = miss;
+
+  if (tasks.length === 0) {
+    list.innerHTML = '<div class="empty"><i class="ti ti-mood-smile"></i>할 일을 추가해 보세요!</div>';
+    return;
+  }
+  const iconMap = { pending: 'ti-clock', done: 'ti-check', missed: 'ti-x' };
+  list.innerHTML = tasks.map(t => {
+    const showReason = showReasonFor === t.id && t.status === 'pending';
+    const badge = t.status === 'done'
+      ? '<span class="badge done"><i class="ti ti-check" style="font-size:10px"></i> 완료</span>'
+      : t.status === 'missed'
+      ? '<span class="badge missed"><i class="ti ti-x" style="font-size:10px"></i> 미완료</span>'
+      : '<span class="badge pending"><i class="ti ti-clock" style="font-size:10px"></i> 진행중</span>';
+    let btns = t.status === 'pending'
+      ? `<button class="action-btn btn-complete" onclick="markDone(${t.id})"><i class="ti ti-check"></i> 완료</button>
+         <button class="action-btn btn-fail" onclick="markFail(${t.id})"><i class="ti ti-x"></i> 미완료</button>
+         <button class="action-btn btn-del" onclick="deleteTask(${t.id})"><i class="ti ti-trash"></i></button>`
+      : `<button class="undo-link" onclick="undoTask(${t.id})"><i class="ti ti-rotate-left" style="font-size:12px;vertical-align:-1px"></i> 되돌리기</button>
+         <button class="action-btn btn-del" onclick="deleteTask(${t.id})"><i class="ti ti-trash"></i></button>`;
+    const reasonSection = showReason
+      ? `<div class="reason-box"><textarea class="reason-input" id="reason-${t.id}" placeholder="완료하지 못한 이유를 입력하세요..."></textarea><button class="reason-submit" onclick="submitReason(${t.id})">저장</button></div>`
+      : (t.reason ? `<div class="reason-display"><i class="ti ti-message-circle" style="font-size:14px;flex-shrink:0;margin-top:1px"></i>${t.reason}</div>` : '');
+    return `<div class="task-card ${t.status}">
+      <div class="task-top">
+        <div class="task-icon"><i class="ti ${iconMap[t.status]}"></i></div>
+        <span class="task-text">${t.text}</span>${badge}
+      </div>
+      <div class="btn-row">${btns}</div>${reasonSection}
+    </div>`;
+  }).join('');
+}
+
+// ── 과거 탭 ──────────────────────────────
+function renderPast() {
+  const panel = document.getElementById('past-panel');
+  const pastKeys = Object.keys(allData).filter(k => k !== todayKey).sort().reverse();
+
+  if (pastKeys.length === 0) {
+    panel.innerHTML = '<div class="no-data"><i class="ti ti-clock"></i>아직 과거 기록이 없어요.</div>';
+    return;
+  }
+  if (!selectedPastKey || !allData[selectedPastKey]) selectedPastKey = pastKeys[0];
+
+  const chipHtml = pastKeys.map(k => {
+    const [,m,d] = k.split('-');
+    return `<button class="nav-date-chip ${k === selectedPastKey ? 'selected' : ''}" onclick="selectPastDay('${k}')">${parseInt(m)}/${parseInt(d)}</button>`;
+  }).join('');
+
+  const arr = allData[selectedPastKey] || [];
+  const d = arr.filter(t => t.status === 'done').length;
+  const m = arr.filter(t => t.status === 'missed').length;
+  const p = arr.filter(t => t.status === 'pending').length;
+  const total = arr.length;
+  const dPct = total > 0 ? Math.round(d / total * 100) : 0;
+  const mPct = total > 0 ? Math.round(m / total * 100) : 0;
+  const pPct = 100 - dPct - mPct;
+
+  const [yr, mo, dy] = selectedPastKey.split('-');
+  const dateObj = new Date(parseInt(yr), parseInt(mo)-1, parseInt(dy));
+  const dayLabel = `${parseInt(yr)}년 ${parseInt(mo)}월 ${parseInt(dy)}일 (${WEEK[dateObj.getDay()]}요일)`;
+
+  const curIdx = pastKeys.indexOf(selectedPastKey);
+  const iconMap = { pending: 'ti-clock', done: 'ti-check', missed: 'ti-x' };
+
+  const taskListHtml = arr.length === 0
+    ? '<div style="color:#888;font-size:14px;padding:1rem;text-align:center">이 날은 할 일이 없었어요</div>'
+    : arr.map(t => `
+      <div class="past-task ${t.status}">
+        <div class="past-task-icon"><i class="ti ${iconMap[t.status]}"></i></div>
+        <div class="past-task-body">
+          <div class="past-task-text">${t.text}</div>
+          ${t.reason ? `<div class="past-task-reason"><i class="ti ti-message-circle" style="font-size:11px;vertical-align:-1px"></i> ${t.reason}</div>` : ''}
+        </div>
+      </div>`).join('');
+
+  panel.innerHTML = `
+    <div class="date-chips-wrap">
+      <button class="nav-btn" onclick="navPastDay(1)" ${curIdx >= pastKeys.length-1 ? 'disabled' : ''}><i class="ti ti-chevron-left"></i></button>
+      <div class="chip-scroll" id="chip-scroll">${chipHtml}</div>
+      <button class="nav-btn" onclick="navPastDay(-1)" ${curIdx <= 0 ? 'disabled' : ''}><i class="ti ti-chevron-right"></i></button>
+    </div>
+    <div class="past-day-card">
+      <div class="past-day-title"><i class="ti ti-calendar-event"></i> ${dayLabel}</div>
+      <div class="past-badges">
+        <span class="past-badge g"><i class="ti ti-check" style="font-size:11px"></i> 완료 ${d}</span>
+        <span class="past-badge o"><i class="ti ti-x" style="font-size:11px"></i> 미완료 ${m}</span>
+        ${p > 0 ? `<span class="past-badge b"><i class="ti ti-clock" style="font-size:11px"></i> 미처리 ${p}</span>` : ''}
+      </div>
+      ${total > 0 ? `
+      <div class="past-bar">
+        <div class="past-bar-done" style="width:${dPct}%"></div>
+        <div class="past-bar-miss" style="width:${mPct}%"></div>
+        <div class="past-bar-pend" style="width:${pPct}%"></div>
+      </div>
+      <div class="leg-row">
+        <span><span class="leg-sq" style="background:#1D9E75"></span>완료 ${dPct}%</span>
+        <span><span class="leg-sq" style="background:#D85A30"></span>미완료 ${mPct}%</span>
+        ${p > 0 ? `<span><span class="leg-sq" style="background:#B5D4F4"></span>미처리 ${pPct}%</span>` : ''}
+      </div>` : ''}
+      <div class="past-task-list">${taskListHtml}</div>
+    </div>`;
+
+  setTimeout(() => {
+    const sel = document.querySelector('.nav-date-chip.selected');
+    if (sel) sel.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, 50);
+}
+
+window.selectPastDay = function(key) { selectedPastKey = key; renderPast(); };
+window.navPastDay = function(dir) {
+  const pastKeys = Object.keys(allData).filter(k => k !== todayKey).sort().reverse();
+  const next = pastKeys.indexOf(selectedPastKey) + dir;
+  if (next >= 0 && next < pastKeys.length) { selectedPastKey = pastKeys[next]; renderPast(); }
+};
+
+// ── 통계 탭 ──────────────────────────────
+function renderStats() {
+  const panel = document.getElementById('history-panel');
+  const sortedDays = Object.keys(allData).sort();
+  let totalAll = 0, doneAll = 0, missAll = 0;
+  sortedDays.forEach(k => {
+    const arr = allData[k] || [];
+    totalAll += arr.length;
+    doneAll += arr.filter(t => t.status === 'done').length;
+    missAll += arr.filter(t => t.status === 'missed').length;
+  });
+  const finishedAll = doneAll + missAll;
+  const donePct = finishedAll > 0 ? Math.round(doneAll / finishedAll * 100) : 0;
+  const missPct = finishedAll > 0 ? 100 - donePct : 0;
+  const recentDays = sortedDays.slice(-14);
+  const chartLabels = recentDays.map(k => { const [,m,d] = k.split('-'); return `${parseInt(m)}/${parseInt(d)}`; });
+  const chartDone = recentDays.map(k => (allData[k]||[]).filter(t=>t.status==='done').length);
+  const chartMiss = recentDays.map(k => (allData[k]||[]).filter(t=>t.status==='missed').length);
+  const chartPend = recentDays.map(k => (allData[k]||[]).filter(t=>t.status==='pending').length);
+
+  if (totalAll === 0) {
+    panel.innerHTML = '<div class="no-data"><i class="ti ti-chart-bar"></i>아직 기록이 없어요.</div>';
+    return;
+  }
+  const doneW = donePct > 0 ? Math.max(donePct, 8) : 0;
+  const isFull = missPct === 0;
+  panel.innerHTML = `
+    <div class="overall-card">
+      <div class="overall-title"><i class="ti ti-trophy"></i> 전체 누적 통계</div>
+      <div class="overall-stats">
+        <div class="ov-stat blue"><div class="n">${totalAll}</div><div class="l">전체 할일</div></div>
+        <div class="ov-stat green"><div class="n">${doneAll}</div><div class="l">완료</div></div>
+        <div class="ov-stat coral"><div class="n">${missAll}</div><div class="l">미완료</div></div>
+      </div>
+      <div class="bar-labels">
+        <span class="bar-lbl-done"><i class="ti ti-check" style="font-size:12px"></i> 완료율 ${donePct}%</span>
+        <span class="bar-lbl-miss">미완료율 ${missPct}% <i class="ti ti-x" style="font-size:12px"></i></span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-done-fill ${isFull?'full':''}" style="width:${doneW}%">
+          ${donePct >= 15 ? `<span class="bar-pct-text">${donePct}%</span>` : ''}
+        </div>
+        ${!isFull ? '<div class="bar-miss-fill"></div>' : ''}
+      </div>
+      <div class="leg-row" style="margin-top:8px">
+        <span><span class="leg-sq" style="background:#1D9E75"></span>완료 (${doneAll}개)</span>
+        <span><span class="leg-sq" style="background:#D85A30"></span>미완료 (${missAll}개)</span>
+        ${totalAll-finishedAll > 0 ? `<span><span class="leg-sq" style="background:#B5D4F4"></span>진행중 (${totalAll-finishedAll}개)</span>` : ''}
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><i class="ti ti-chart-bar"></i> 최근 ${chartLabels.length}일 현황</div>
+      <div class="chart-legend">
+        <span><span class="leg-sq" style="background:#1D9E75"></span>완료</span>
+        <span><span class="leg-sq" style="background:#D85A30"></span>미완료</span>
+        <span><span class="leg-sq" style="background:#B5D4F4"></span>진행중</span>
+      </div>
+      <div style="position:relative;width:100%;height:${Math.max(160,chartLabels.length*20)}px;">
+        <canvas id="daily-chart" role="img" aria-label="날짜별 할 일 통계">날짜별 할 일 통계 차트</canvas>
+      </div>
+    </div>`;
+
+  setTimeout(() => {
+    const ctx = document.getElementById('daily-chart');
+    if (!ctx) return;
+    if (chartInst) { chartInst.destroy(); chartInst = null; }
+    chartInst = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: chartLabels,
+        datasets: [
+          { label: '완료', data: chartDone, backgroundColor: '#1D9E75', borderRadius: 6, borderSkipped: false },
+          { label: '미완료', data: chartMiss, backgroundColor: '#D85A30', borderRadius: 6, borderSkipped: false },
+          { label: '진행중', data: chartPend, backgroundColor: '#B5D4F4', borderRadius: 6, borderSkipped: false }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { stacked: true, grid: { display: false }, ticks: { color: '#888', font: { size: 10 }, autoSkip: false, maxRotation: 45 } },
+          y: { stacked: true, grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { color: '#888', font: { size: 10 }, stepSize: 1 }, beginAtZero: true }
+        }
+      }
+    });
+  }, 100);
+}
+
+// ── 탭 전환 ──────────────────────────────
+window.switchTab = function(tab) {
+  currentTab = tab;
+  ['today','past','stats'].forEach(t => {
+    document.getElementById('panel-' + t).classList.toggle('active', t === tab);
+    document.getElementById('tab-' + t).classList.toggle('active', t === tab);
+  });
+  if (tab === 'past') renderPast();
+  if (tab === 'stats') renderStats();
+};
+
+</script>
+</body>
+</html>
