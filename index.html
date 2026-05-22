@@ -149,6 +149,44 @@ html, body { height: 100%; background: #f0f4f8; font-family: -apple-system, 'Not
 .no-data i{font-size:28px;display:block;margin-bottom:8px;}
 
 .panel{display:none;} .panel.active{display:block;}
+
+/* ── 캘린더 ── */
+.cal-card { background: #fff; border: 1.5px solid #B5D4F4; border-radius: 24px; padding: 16px; margin-bottom: 13px; }
+.cal-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.cal-nav-btn { width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid #B5D4F4; background: #f0f4f8; color: #185FA5; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 17px; }
+.cal-nav-btn:active { background: #E6F1FB; }
+.cal-month-label { font-size: 17px; font-weight: 700; color: #185FA5; }
+.cal-week-hdr { display: grid; grid-template-columns: repeat(7,1fr); margin-bottom: 6px; }
+.cal-week-hdr span { text-align: center; font-size: 11px; font-weight: 700; color: #888; padding: 3px 0; }
+.cal-week-hdr span:first-child { color: #e05555; }
+.cal-week-hdr span:last-child  { color: #4488cc; }
+.cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 3px; }
+.cal-cell { border-radius: 12px; padding: 4px 2px 6px; cursor: pointer; min-height: 54px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.cal-cell:active { background: #E6F1FB; }
+.cal-cell.other-month { opacity: .28; pointer-events: none; }
+.cal-day-num { font-size: 13px; font-weight: 600; color: #1a1a1a; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
+.cal-cell.sunday  .cal-day-num { color: #e05555; }
+.cal-cell.saturday .cal-day-num { color: #4488cc; }
+.cal-cell.today .cal-day-num   { background: #185FA5; color: #fff; }
+.cal-cell.selected .cal-day-num { background: #185FA5; color: #fff; }
+.cal-cell.today.sunday .cal-day-num,
+.cal-cell.selected.sunday .cal-day-num { background: #e05555; color: #fff; }
+.cal-cell.today.saturday .cal-day-num,
+.cal-cell.selected.saturday .cal-day-num { background: #4488cc; color: #fff; }
+.cal-cell.selected { background: #E6F1FB; }
+.cal-dots { display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; max-width: 32px; }
+.cal-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+.cal-dot.pending { background: #B5D4F4; }
+.cal-dot.done    { background: #1D9E75; }
+.cal-dot.missed  { background: #D85A30; }
+
+.cal-day-panel { background: #fff; border: 1.5px solid #B5D4F4; border-radius: 24px; padding: 16px; margin-bottom: 13px; }
+.cal-day-panel-title { font-size: 15px; font-weight: 700; color: #185FA5; display: flex; align-items: center; gap: 8px; margin-bottom: 13px; }
+.cal-add-toggle { display: flex; align-items: center; justify-content: space-between; cursor: pointer; padding: 10px 14px; background: #E6F1FB; border-radius: 16px; margin-bottom: 10px; }
+.cal-add-toggle span { font-size: 13px; font-weight: 700; color: #185FA5; display: flex; align-items: center; gap: 6px; }
+.cal-add-body { display: none; }
+.cal-add-body.open { display: block; }
+.cal-task-list { display: flex; flex-direction: column; gap: 9px; }
 </style>
 </head>
 <body>
@@ -171,14 +209,31 @@ html, body { height: 100%; background: #f0f4f8; font-family: -apple-system, 'Not
         <div class="title"><i class="ti ti-checklist"></i> 오늘의 할 일</div>
       </div>
       <div class="tab-btns">
-        <button class="tab-btn active" id="tab-today" onclick="switchTab('today')"><i class="ti ti-calendar-today" style="font-size:13px"></i> 오늘</button>
+        <button class="tab-btn active" id="tab-cal" onclick="switchTab('cal')"><i class="ti ti-calendar" style="font-size:13px"></i> 캘린더</button>
+        <button class="tab-btn" id="tab-today" onclick="switchTab('today')"><i class="ti ti-calendar-today" style="font-size:13px"></i> 오늘</button>
         <button class="tab-btn" id="tab-past"  onclick="switchTab('past')"><i class="ti ti-history" style="font-size:13px"></i> 과거</button>
         <button class="tab-btn" id="tab-stats" onclick="switchTab('stats')"><i class="ti ti-chart-bar" style="font-size:13px"></i> 통계</button>
       </div>
     </div>
   </div>
 
-  <div id="panel-today" class="panel active">
+  <!-- 캘린더 탭 -->
+  <div id="panel-cal" class="panel active">
+    <div class="cal-card">
+      <div class="cal-nav">
+        <button class="cal-nav-btn" onclick="calPrev()"><i class="ti ti-chevron-left"></i></button>
+        <div class="cal-month-label" id="cal-month-label"></div>
+        <button class="cal-nav-btn" onclick="calNext()"><i class="ti ti-chevron-right"></i></button>
+      </div>
+      <div class="cal-week-hdr">
+        <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+      </div>
+      <div class="cal-grid" id="cal-grid"></div>
+    </div>
+    <div id="cal-day-panel" style="display:none;"></div>
+  </div>
+
+  <div id="panel-today" class="panel">
     <div class="stats">
       <div class="stat blue" ><div class="num" id="s-total">0</div><div class="lbl"><i class="ti ti-list"></i> 전체</div></div>
       <div class="stat green"><div class="num" id="s-done">0</div><div class="lbl"><i class="ti ti-circle-check"></i> 완료</div></div>
@@ -230,7 +285,7 @@ let showReasonFor = null;
 let editingId = null;
 let selectedPastKey = null;
 let chartInst = null;
-let currentTab = 'today';
+let currentTab = 'cal';
 
 function setSyncStatus(s) {
   const bar = document.getElementById('sync-bar');
@@ -245,7 +300,8 @@ onValue(dataRef, snap => {
   if (!allData[todayKey]) allData[todayKey] = [];
   document.getElementById('loading-overlay').classList.add('hidden');
   setSyncStatus('synced');
-  if (currentTab === 'today') renderToday();
+  if (currentTab === 'cal') renderCalendar();
+  else if (currentTab === 'today') renderToday();
   else if (currentTab === 'past') renderPast();
   else renderStats();
 }, () => {
@@ -504,13 +560,221 @@ function renderStats() {
   },100);
 }
 
+
+// ── 캘린더 ──────────────────────────────
+const WEEK  = ['일','월','화','수','목','금','토'];
+const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+
+let calYear  = new Date().getFullYear();
+let calMonth = new Date().getMonth();
+let calSelectedKey = null;
+let calEditingId = null;
+
+function dkey(y, m, d) {
+  return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+
+function renderCalendar() {
+  const today = new Date();
+  const tKey  = dkey(today.getFullYear(), today.getMonth(), today.getDate());
+  document.getElementById('cal-month-label').textContent = `${calYear}년 ${MONTHS[calMonth]}`;
+
+  const firstDay  = new Date(calYear, calMonth, 1).getDay();
+  const lastDate  = new Date(calYear, calMonth+1, 0).getDate();
+  const prevLast  = new Date(calYear, calMonth, 0).getDate();
+
+  let cells = '';
+  for (let i=0; i<firstDay; i++) {
+    cells += `<div class="cal-cell other-month"><div class="cal-day-num">${prevLast-firstDay+1+i}</div></div>`;
+  }
+  for (let d=1; d<=lastDate; d++) {
+    const key = dkey(calYear, calMonth, d);
+    const dow = new Date(calYear, calMonth, d).getDay();
+    const tasks = allData[key] || [];
+    const isToday    = key === tKey;
+    const isSelected = key === calSelectedKey;
+    let cls = 'cal-cell';
+    if (isToday)    cls += ' today';
+    if (isSelected) cls += ' selected';
+    if (dow===0) cls += ' sunday';
+    if (dow===6) cls += ' saturday';
+    const dots = tasks.slice(0,4).map(t => `<div class="cal-dot ${t.status}"></div>`).join('');
+    cells += `<div class="${cls}" onclick="calSelect('${key}')">
+      <div class="cal-day-num">${d}</div>
+      ${dots ? `<div class="cal-dots">${dots}</div>` : ''}
+    </div>`;
+  }
+  const remain = (firstDay+lastDate)%7===0 ? 0 : 7-(firstDay+lastDate)%7;
+  for (let i=1; i<=remain; i++) cells += `<div class="cal-cell other-month"><div class="cal-day-num">${i}</div></div>`;
+  document.getElementById('cal-grid').innerHTML = cells;
+  if (calSelectedKey) renderCalDay(calSelectedKey);
+}
+
+window.calPrev = function() {
+  if (calMonth===0){calYear--;calMonth=11;}else calMonth--;
+  renderCalendar();
+};
+window.calNext = function() {
+  if (calMonth===11){calYear++;calMonth=0;}else calMonth++;
+  renderCalendar();
+};
+window.calSelect = function(key) {
+  calSelectedKey = key;
+  calEditingId = null;
+  renderCalendar();
+};
+
+function renderCalDay(key) {
+  const panel = document.getElementById('cal-day-panel');
+  panel.style.display = '';
+  if (!allData[key]) allData[key] = [];
+  const tasks = allData[key];
+  const [yr,mo,dy] = key.split('-');
+  const dateObj = new Date(parseInt(yr),parseInt(mo)-1,parseInt(dy));
+  const dayLabel = `${parseInt(yr)}년 ${parseInt(mo)}월 ${parseInt(dy)}일 (${WEEK[dateObj.getDay()]}요일)`;
+
+  const iconMap = {pending:'ti-clock',done:'ti-check',missed:'ti-x'};
+  const taskHtml = tasks.length === 0
+    ? '<div style="text-align:center;padding:1.5rem;color:#888;font-size:14px;border:1.5px dashed #B5D4F4;border-radius:16px;background:#E6F1FB;">할 일이 없어요. 추가해 보세요!</div>'
+    : tasks.map(t => {
+        const isEd = calEditingId === t.id;
+        const badge = t.status==='done'
+          ? '<span class="badge done" style="font-size:10px;"><i class="ti ti-check" style="font-size:9px"></i> 완료</span>'
+          : t.status==='missed'
+          ? '<span class="badge missed" style="font-size:10px;"><i class="ti ti-x" style="font-size:9px"></i> 미완료</span>'
+          : '<span class="badge pending" style="font-size:10px;"><i class="ti ti-clock" style="font-size:9px"></i> 예정</span>';
+        let btns = t.status==='pending'
+          ? `<button class="action-btn btn-complete" onclick="calDone(${t.id},'${key}')"><i class="ti ti-check"></i> 완료</button>
+             <button class="action-btn btn-fail"     onclick="calFail(${t.id},'${key}')"><i class="ti ti-x"></i> 미완료</button>
+             <button class="action-btn btn-edit"     onclick="calEdit(${t.id},'${key}')"><i class="ti ti-edit"></i> 수정</button>
+             <button class="action-btn btn-del"      onclick="calDel(${t.id},'${key}')"><i class="ti ti-trash"></i></button>`
+          : `<button class="undo-link" onclick="calUndo(${t.id},'${key}')"><i class="ti ti-rotate-left" style="font-size:12px;vertical-align:-1px"></i> 되돌리기</button>
+             <button class="action-btn btn-edit" onclick="calEdit(${t.id},'${key}')"><i class="ti ti-edit"></i> 수정</button>
+             <button class="action-btn btn-del"  onclick="calDel(${t.id},'${key}')"><i class="ti ti-trash"></i></button>`;
+        const editBox = isEd ? `
+          <div class="edit-box">
+            <div class="edit-box-title"><i class="ti ti-edit"></i> 할 일 수정</div>
+            <div class="edit-input-row">
+              <input class="edit-text-input" type="text" id="cal-edit-${t.id}" value="${t.text.replace(/"/g,'&quot;')}" maxlength="80"
+                onkeydown="if(event.key==='Enter')calSaveEdit(${t.id},'${key}');else if(event.key==='Escape')calCancelEdit('${key}');" />
+              <button class="edit-save"   onclick="calSaveEdit(${t.id},'${key}')"><i class="ti ti-device-floppy"></i> 저장</button>
+              <button class="edit-cancel" onclick="calCancelEdit('${key}')">취소</button>
+            </div>
+          </div>` : '';
+        return `<div class="task-card ${t.status}" style="margin-bottom:0;">
+          <div class="task-top">
+            <div class="task-icon"><i class="ti ${iconMap[t.status]}"></i></div>
+            <span class="task-text" style="${t.status==='done'?'text-decoration:line-through;color:#0F6E56;':t.status==='missed'?'color:#712B13;':''}">${t.text}</span>
+            ${badge}
+          </div>
+          <div class="btn-row">${btns}</div>
+          ${editBox}
+        </div>`;
+      }).join('');
+
+  panel.innerHTML = `
+    <div class="cal-day-panel-title">
+      <i class="ti ti-calendar-event"></i>${dayLabel}
+      <button onclick="calCloseDay()" style="margin-left:auto;border:none;background:#f0f4f8;border-radius:50%;width:30px;height:30px;cursor:pointer;color:#666;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="cal-add-toggle" onclick="calToggleAdd()">
+      <span><i class="ti ti-plus-circle"></i> 할 일 추가</span>
+      <i class="ti ti-chevron-down" id="cal-arrow" style="color:#185FA5;font-size:16px;transition:transform .25s;transform:rotate(-90deg);"></i>
+    </div>
+    <div class="cal-add-body" id="cal-add-body">
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <input type="text" id="cal-task-input" placeholder="할 일을 입력하세요..." maxlength="80"
+          style="flex:1;height:44px;border-radius:99px;border:1.5px solid #B5D4F4;background:#fff;color:#1a1a1a;padding:0 16px;font-size:14px;outline:none;font-family:inherit;"
+          onkeydown="if(event.key==='Enter')calAdd('${key}');" />
+        <button onclick="calAdd('${key}')" style="height:44px;padding:0 16px;border-radius:99px;border:none;background:#185FA5;color:#E6F1FB;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;"><i class="ti ti-plus"></i></button>
+      </div>
+    </div>
+    <div class="cal-task-list">${taskHtml}</div>`;
+
+  setTimeout(() => {
+    const inp = document.getElementById('cal-task-input');
+    if (inp) inp.addEventListener('focus', () => {
+      const body = document.getElementById('cal-add-body');
+      if (body && !body.classList.contains('open')) {
+        body.classList.add('open');
+        document.getElementById('cal-arrow').style.transform = 'rotate(0deg)';
+      }
+    });
+  }, 50);
+}
+
+window.calToggleAdd = function() {
+  const body = document.getElementById('cal-add-body');
+  const arrow = document.getElementById('cal-arrow');
+  if (!body) return;
+  const open = body.classList.contains('open');
+  body.classList.toggle('open', !open);
+  arrow.style.transform = open ? 'rotate(-90deg)' : 'rotate(0deg)';
+  if (!open) setTimeout(() => document.getElementById('cal-task-input')?.focus(), 50);
+};
+
+window.calCloseDay = function() {
+  calSelectedKey = null;
+  document.getElementById('cal-day-panel').style.display = 'none';
+  renderCalendar();
+};
+
+window.calAdd = async function(key) {
+  const inp = document.getElementById('cal-task-input');
+  const text = inp?.value.trim(); if (!text) return;
+  if (!allData[key]) allData[key] = [];
+  allData[key].push({ id: Date.now(), text, status: 'pending', reason: '' });
+  inp.value = '';
+  renderCalDay(key); renderCalendar(); await persist();
+};
+
+window.calDone = async function(id, key) {
+  const t = (allData[key]||[]).find(t=>t.id===id); if(!t) return;
+  t.status='done'; t.reason='';
+  renderCalDay(key); renderCalendar(); await persist();
+};
+window.calFail = async function(id, key) {
+  const t = (allData[key]||[]).find(t=>t.id===id); if(!t) return;
+  t.status='missed'; t.reason='미완료';
+  renderCalDay(key); renderCalendar(); await persist();
+};
+window.calUndo = async function(id, key) {
+  const t = (allData[key]||[]).find(t=>t.id===id); if(!t) return;
+  t.status='pending'; t.reason='';
+  renderCalDay(key); renderCalendar(); await persist();
+};
+window.calDel = async function(id, key) {
+  allData[key] = (allData[key]||[]).filter(t=>t.id!==id);
+  renderCalDay(key); renderCalendar(); await persist();
+};
+window.calEdit = function(id, key) {
+  calEditingId = calEditingId===id ? null : id;
+  renderCalDay(key);
+  if (calEditingId===id) setTimeout(()=>{
+    const inp = document.getElementById('cal-edit-'+id);
+    if(inp){inp.focus();inp.select();}
+  },30);
+};
+window.calSaveEdit = async function(id, key) {
+  const inp = document.getElementById('cal-edit-'+id);
+  const text = inp?.value.trim(); if(!text) return;
+  const t = (allData[key]||[]).find(t=>t.id===id); if(!t) return;
+  t.text = text; calEditingId = null;
+  renderCalDay(key); renderCalendar(); await persist();
+};
+window.calCancelEdit = function(key) {
+  calEditingId = null;
+  renderCalDay(key);
+};
+
 window.switchTab = function(tab) {
   currentTab = tab;
-  ['today','past','stats'].forEach(t=>{
+  ['cal','today','past','stats'].forEach(t=>{
     document.getElementById('panel-'+t).classList.toggle('active',t===tab);
     document.getElementById('tab-'+t).classList.toggle('active',t===tab);
   });
-  if (tab==='past') renderPast();
+  if (tab==='cal')   renderCalendar();
+  if (tab==='past')  renderPast();
   if (tab==='stats') renderStats();
 };
 </script>
